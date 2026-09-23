@@ -4,16 +4,10 @@ CSE3CWA/CSE5006 — Assignment 3. A small full-stack app for saving and
 managing AI prompt records, protected behind GitHub OAuth with an
 Express-issued JWT.
 
-> ⚠️ **Fill in the blanks marked `TODO` before submitting.** This README
-> ships as a complete template with all required sections in place — the
-> code has been built and locally smoke-tested, but the OAuth
-> credentials, deployed URL, and cURL results still need to be filled in
-> once you deploy.
-
 ## 1. Deployed application
 
-- **Public URL:** `TODO: https://your-app-name.onrender.com`
-- **Cloud platform used:** `TODO: Render / Azure App Service / other`
+- **Public URL:** https://ai-capsule-sks3.onrender.com
+- **Cloud platform used:** Render (free web service tier)
 
 ## 2. Tech stack
 
@@ -57,6 +51,26 @@ For frontend-only iteration with hot reload, `cd client && npm run dev`
    in `.env`, e.g. `https://your-app.onrender.com/api/auth/github/callback`.
 4. Copy the generated Client ID and Client Secret into your environment
    variables (never into the repo).
+
+### Deploying to Render
+
+- **Build Command:** `npm install && cd client && npm install --include=dev && npm run build && cd ..`
+  (the `--include=dev` is required because Render sets `NODE_ENV=production`
+  for the build step too, and npm skips `devDependencies` — including
+  `vite` — by default under that flag; without it the client build fails
+  with `vite: not found`.)
+- **Start Command:** `npm start`
+- **Environment variable `NODE_VERSION`:** set to `20.18.0`. Render's
+  default Node version (26.x) is too new for `better-sqlite3`'s native
+  module to compile against out of the box; pinning to Node 20 lets it
+  install from a prebuilt binary instead of failing the build.
+- Set all seven environment variables listed in §6 in Render's
+  "Environment" tab, with `GITHUB_CALLBACK_URL` and `APP_BASE_URL`
+  pointing at the deployed URL (not localhost), and `NODE_ENV=production`.
+- Update the GitHub OAuth App's "Authorization callback URL" to the
+  deployed callback URL too — GitHub OAuth Apps only support one
+  callback URL at a time, so switching between local and deployed
+  testing means updating it each time.
 
 ## 4. Required routes
 
@@ -114,73 +128,98 @@ configuration is needed.
   `GET`/`PUT`/`DELETE` all filter by `WHERE user_id = ?`, so a user can
   only ever see or modify their own records (verified locally — see
   §9 below).
-- **Persistence:** `TODO — state which platform you deployed to and
-  whether its filesystem is persistent.` On Render's free web service the
-  filesystem is ephemeral, so the SQLite file is wiped on restart/redeploy;
-  this is a known, disclosed limitation of the assignment's minimum
+- **Persistence:** Deployed on Render's free web service tier, where the
+  filesystem is ephemeral — the SQLite file is wiped on restart/redeploy.
+  This is a known, disclosed limitation of the assignment's minimum
   storage requirement, not a bug.
 
 ## 8. Required cURL checks
 
-Run against the **deployed** URL before submitting, and paste the actual
-output below.
+Run against the deployed URL:
 
 ```bash
 # Test 1 - no authentication
-curl -i https://YOUR-APP/api/capsules
-# Required: 401 Unauthorized
+curl -i https://ai-capsule-sks3.onrender.com/api/capsules
 
 # Test 2 - fake / invalid JWT
-curl -i -H "Cookie: token=fake-token-123" https://YOUR-APP/api/capsules
-# Required: 401 Unauthorized
+curl -i -H "Cookie: token=fake-token-123" https://ai-capsule-sks3.onrender.com/api/capsules
 ```
 
 **Results:**
 
+Test 1 (no cookie):
 ```
-TODO: paste Test 1 output here
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+
+{"error":"Unauthorized"}
 ```
 
+Test 2 (fake cookie `token=fake-token-123`):
 ```
-TODO: paste Test 2 output here
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+x-powered-by: Express
+
+{"error":"Unauthorized"}
 ```
+
+Both requests were correctly rejected before the JWT middleware allowed
+any capsule data to be returned.
 
 ## 9. Known limitation
 
-`TODO: state one honest limitation`, e.g.: SQLite storage is not
-persistent on Render's free tier — data is lost on redeploy/restart. No
-refresh-token flow; sessions expire after 2 hours and require signing in
-again. No file upload for screenshots — evidence is a URL only, as
-permitted by the brief.
+SQLite storage is not persistent on Render's free tier — the filesystem
+is ephemeral, so all capsule data is lost on redeploy or when the free
+instance restarts after a period of inactivity. There is also no
+refresh-token flow, so sessions expire after 2 hours and require signing
+in again.
 
 ## 10. AI-assisted development statement
 
-- **Tool(s) used:** `TODO, e.g. Claude`
-- **What it helped with:** initial project scaffold (Express routes,
-  React components, SQLite schema wiring), the GitHub OAuth → JWT →
-  HttpOnly cookie flow, and this README structure.
-- **What I personally completed:** `TODO — describe the parts you wrote,
-  configured, debugged, or changed yourself: e.g. creating the GitHub
-  OAuth App and setting the callback URL, configuring the Render service
-  and environment variables, testing the deployed cURL checks, adjusting
-  the UI.`
-- **One problem found and corrected in AI-generated code/config:**
-  `TODO — e.g. "the initial cookie config used sameSite: 'none' which
-  requires secure:true even in local dev and broke the OAuth redirect
-  over http://localhost; changed to sameSite: 'lax' for same-origin use."`
+- **Tool(s) used:** Claude
+- **What it helped with:** we worked together on the initial project
+  scaffold (Express routes, React components, SQLite schema wiring), the
+  GitHub OAuth → JWT → HttpOnly cookie flow, diagnosing two Render
+  deployment failures, and this README structure.
+- **What I personally completed:** created the GitHub OAuth App and
+  configured its callback URL (twice — once for local testing, once for
+  the deployed URL, since a GitHub OAuth App only supports one callback
+  URL at a time); created and configured the Render web service,
+  including all environment variables; pushed the code to GitHub and
+  connected it to Render; ran and read the Render build logs to diagnose
+  both deployment failures; ran the required cURL checks against the
+  live deployed API and confirmed the results; tested the full CRUD
+  cycle and the GitHub login flow through the browser on the deployed
+  app.
+- **One problem found and corrected:** the initial Render Build Command
+  (`npm install && npm run build:client`) failed with `vite: not found`
+  because `NODE_ENV=production` was set as an environment variable, and
+  npm's default behaviour under that flag is to skip installing
+  `devDependencies` — including `vite`, which the client build needs.
+  Fixed by changing the Build Command to explicitly run
+  `npm install --include=dev` for the client. A related issue: the
+  default Node version on Render (26.x) was too new for `better-sqlite3`
+  to compile its native module against; fixed by pinning
+  `NODE_VERSION=20.18.0`.
 - **How OAuth login, JWT verification and protected API behaviour were
-  verified:** Logged in through GitHub in the browser and confirmed the
-  `token` cookie was set as `HttpOnly`/`Secure` in DevTools; ran both
-  required cURL checks against the deployed `/api/capsules` and confirmed
-  `401 Unauthorized` in both cases; confirmed authenticated requests from
-  the browser succeeded.
-- **How CRUD behaviour and user data ownership were verified:** Created,
-  read, updated and deleted capsule records through the dashboard UI for
-  one logged-in account, then signed in as a second GitHub account and
-  confirmed its `/api/capsules` list was empty and that attempting to
-  `PUT`/`DELETE` the first account's record IDs returned `404` rather
-  than succeeding.
+  verified:** Logged in through GitHub in the browser on both the local
+  and deployed apps, confirming the `token` cookie was set as
+  `HttpOnly`/`Secure`; ran both required cURL checks against the
+  deployed `/api/capsules` and confirmed `401 Unauthorized` in both
+  cases; confirmed authenticated requests from the browser succeeded and
+  landed correctly on `/dashboard`.
+- **How CRUD behaviour and user data ownership were verified:** Locally,
+  signed requests with two different JWTs (different `sub` claims) via
+  cURL and confirmed a record created under one user's token was
+  invisible to `GET` under the other, and that `PUT`/`DELETE` against
+  the first user's record ID returned `404` when sent with the second
+  user's token rather than succeeding. On the deployed app, created,
+  read, updated and deleted a capsule record end-to-end through the
+  dashboard UI as the authenticated GitHub user.
 - **One implementation/deployment decision I made and can explain:**
-  `TODO — e.g. "chose to serve the React build from the same Express app
-  instead of a separate static host, to avoid cross-origin cookie
-  issues with the HttpOnly JWT cookie."`
+  chose to serve the React build from the same Express app instead of a
+  separate static host, so the frontend and API share one origin — this
+  avoids the CORS and cross-origin cookie configuration that would
+  otherwise be needed for the HttpOnly JWT cookie to be sent with
+  requests.
